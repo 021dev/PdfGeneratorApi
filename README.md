@@ -1,263 +1,214 @@
-[![.NET](https://github.com/neozhu/PdfGeneratorApi/actions/workflows/dotnet.yml/badge.svg)](https://github.com/neozhu/PdfGeneratorApi/actions/workflows/dotnet.yml)
+[![.NET](https://github.com/neozhu/PdfGeneratorApi/actions/workflows/dotnet.yml/badge.svg)](https://github.com/neozhu/PdfGeneratorApi/actions/workflows/dotnet.yml) [![Docker Image CI](https://github.com/neozhu/PdfGeneratorApi/actions/workflows/docker-image.yml/badge.svg)](https://github.com/neozhu/PdfGeneratorApi/actions/workflows/docker-image.yml)
 
-# PDF Generator API
 
-This project is a Minimal APIs application built with ASP.NET Core and Playwright. It provides an API to generate PDFs from HTML content or URLs, with additional features such as hiding elements, adding watermarks (text or image), and stamping images onto the generated PDF. The API includes Swagger documentation and supports API Key authentication. It is containerized for easy deployment using Docker.
 
-## Table of Contents
+# PDF Generation API with Watermark and Stamp using Playwright
 
-- [Features](#features)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Environment Variables](#environment-variables)
-- [Running the Application](#running-the-application)
-  - [Using .NET CLI](#using-net-cli)
-  - [Using Docker](#using-docker)
-- [API Documentation](#api-documentation)
-  - [Endpoint](#endpoint)
-  - [Request Parameters](#request-parameters)
-  - [Example Request](#example-request)
-- [Usage Examples](#usage-examples)
-  - [Generating a PDF from HTML Content](#generating-a-pdf-from-html-content)
-  - [Adding a Text Watermark](#adding-a-text-watermark)
-  - [Adding an Image Watermark](#adding-an-image-watermark)
-  - [Adding a Stamp Image](#adding-a-stamp-image)
-- [Security](#security)
-- [Contributing](#contributing)
-- [License](#license)
+## Overview
+
+This lightweight .NET minimal API leverages [Microsoft.Playwright](https://playwright.dev/dotnet/) to generate PDFs from either a provided URL or full HTML content. It supports dynamic watermarking and stamping, allowing users to overlay custom watermark text and a stamp image on the PDF. The API is secured via API Key authentication and comes with integrated Swagger/OpenAPI documentation for easy testing and exploration.
 
 ## Features
 
-- **Generate PDF**: Create PDFs from HTML content or web pages.
-- **Hide Elements**: Specify CSS selectors to hide elements in the PDF.
-- **Add Watermarks**:
-  - Text or image watermarks.
-  - Image watermarks can be uploaded.
-- **Add Stamps**:
-  - Stamp images can be uploaded.
-- **Swagger Integration**: Interactive API documentation and testing.
-- **API Key Authentication**: Simple API key authentication using environment variables.
-- **Containerization**: Dockerfile included for easy container deployment.
+- **PDF Generation from URL:** Render any webpage and generate a PDF.
+- **PDF Generation from HTML:** Generate a PDF from complete HTML content.
+- **Custom Watermark:**  
+  - Optionally add watermark text with dynamic font sizing based on text length.
+  - The watermark text is styled with an adjustable line height, rotated -45° for a diagonal appearance, and rendered with semi-transparency.
+  - Includes logic to wrap long text to prevent overlapping.
+- **Custom Stamp:**  
+  - Optionally add a stamp image to the bottom-right corner.
+  - The stamp is injected to the top layer with a high z-index and padded from the edges.
+- **API Key Authentication:** Secures endpoints by requiring a valid API key provided in the request header.
+- **Swagger/OpenAPI Integration:** Automatically generated API documentation and testing interface.
 
-## Getting Started
+## Endpoints
+
+### Generate PDF from URL
+
+- **Endpoint:** `/api/pdf/from-url`
+- **Method:** `POST`
+- **Parameters:**
+  - `url` (string, required): The URL of the webpage to render.
+  - `watermarkText` (string, optional): Watermark text to overlay on the PDF.
+  - `stampImageFile` (IFormFile, optional): An image file to use as a stamp.
+
+### Generate PDF from HTML
+
+- **Endpoint:** `/api/pdf/from-html`
+- **Method:** `POST`
+- **Parameters:**
+  - `htmlContent` (string, required): The complete HTML content to render.
+  - `watermarkText` (string, optional): Watermark text to overlay on the PDF.
+  - `stampImageFile` (IFormFile, optional): An image file to use as a stamp.
+
+## How It Works
+
+1. **Rendering:**  
+   The API uses Playwright to launch a headless Chromium browser. Depending on the endpoint, it either navigates to a given URL or sets the page content using the provided HTML.
+
+2. **Watermark Injection:**  
+   If watermark text is supplied, the API injects a DOM element via a JavaScript snippet. This element:
+   - Is centered, rotated -45°, and rendered with a semi-transparent style.
+   - Adjusts font size dynamically based on the length of the watermark text.
+   - Uses line-height and text wrapping logic to ensure the text is fully visible without overlapping.
+
+3. **Stamp Injection:**  
+   If a stamp image is provided, it is converted to a Base64 data URL and injected into the page as a fixed element. The stamp is positioned at the bottom-right corner with appropriate padding and a high z-index to prevent being overlapped by other page elements.
+
+4. **PDF Generation:**  
+   Once the page is fully rendered with any injected elements, the API uses Playwright's PDF generation capabilities to create an A4 PDF with custom margins and background printing enabled.
+
+## Setup and Running
 
 ### Prerequisites
 
 - [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
-- [Docker](https://www.docker.com/get-started) (optional, for container deployment)
+- Docker (if using Docker Compose)
 
-### Installation
+### Local Setup
 
-1. **Clone the Repository**:
-
-   ```bash
-   git clone https://github.com/neozhu/PdfGeneratorApi.git
-   cd PdfGeneratorApi
-   ```
-
-2. **Restore Dependencies**:
+1. **Clone the Repository:**
 
    ```bash
-   dotnet restore
+   git clone <repository-url>
+   cd <repository-folder>
    ```
 
-## Configuration
+2. **Configure API Key:**
 
-Set the `ApiKey` in your `appsettings.json` file to secure your API:
+   Set your API key in `appsettings.json` (or via environment variables) under the key `ApiKey`.
 
-```json
-{
-  "ApiKey": "your-api-key-here",
-  // ... other settings
-}
-```
+3. **Install Playwright Browsers:**
 
-Alternatively, you can set the `ApiKey` in the `appsettings.Development.json` file for development purposes:
+   The code automatically calls `Microsoft.Playwright.Program.Main(new string[] { "install" });` to install the required browsers.
 
-```json
-{
-  "ApiKey": "your-api-key-here"
-}
-```
-
-**Note**: Do not commit sensitive information like API keys to version control repositories. For production environments, consider using environment variables or a secure secrets management solution to store sensitive data.
-
-
-## Running the Application
-
-### Using .NET CLI
-
-1. **Run the Application**:
+4. **Run the Application:**
 
    ```bash
    dotnet run
    ```
 
-2. **Access Swagger UI** (in development mode):
+5. **Access Swagger UI:**
 
-   Open your browser and navigate to `http://localhost:5000/swagger` to view the API documentation and interact with the API.
+   In development mode, navigate to `http://localhost:<port>/swagger` to explore and test the API endpoints.
 
-### Using Docker
+### Running with Docker Compose
 
-1. **Build the Docker Image**:
+For a containerized setup, you can use the provided Dockerfile and docker-compose.yml files.
 
-   ```bash
-   docker build -t pdfgeneratorapi .
-   ```
+#### Dockerfile
 
-2. **Run the Docker Container**:
+Create a file named `Dockerfile` with the following content:
 
-   ```bash
-   docker run -d -p 5000:80 -e AapiKey=your-api-key-here pdfgeneratorapi
-   ```
+```dockerfile
+# Use the official .NET 9 SDK image to build the application
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
 
-3. **Access Swagger UI**:
+# Copy the project files and restore dependencies
+COPY . .
+RUN dotnet restore
 
-   Open your browser and navigate to `http://localhost:5000/swagger`.
+# Publish the project in Release configuration
+RUN dotnet publish -c Release -o /app
 
-### Using Docker Compose
+# Use the official .NET 9 ASP.NET runtime image
+FROM mcr.microsoft.com/dotnet/aspnet:9.0
+WORKDIR /app
 
-You can also run the application using Docker Compose with the following configuration:
+# Copy the published app from the build stage
+COPY --from=build /app .
+
+# Expose port 80
+EXPOSE 80
+
+# Start the application
+ENTRYPOINT ["dotnet", "YourProject.dll"]
+```
+
+*Note:* Replace `YourProject.dll` with the actual name of your published DLL.
+
+#### docker-compose.yml
+
+Create a file named `docker-compose.yml` with the following content:
 
 ```yaml
 version: '3.8'
-
 services:
-  pdfgeneratorapi:
-    image: blazordevlab/pdfgeneratorapi:latest
-    container_name: pdfgeneratorapi_container
+  pdfgenerator:
+    build: .
     ports:
-      - "8980:8080"  
+      - "5000:80"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ApiKey=your-api-key-here
-    restart: unless-stopped
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ApiKey=YOUR_API_KEY
 ```
 
-**Steps to Run with Docker Compose**:
+*Note:* Replace `YOUR_API_KEY` with your actual API key. This configuration maps port 80 in the container to port 5000 on your host.
 
-1. **Create a `docker-compose.yml` File**:
+#### Running with Docker Compose
 
-   Save the above configuration into a file named `docker-compose.yml` in your project directory.
-
-2. **Run Docker Compose**:
-
-   ```bash
-   docker-compose up -d
-   ```
-
-3. **Access Swagger UI**:
-
-   Open your browser and navigate to `http://localhost:8980/swagger` to interact with the API documentation.
-
-**Note**:
-
-- Replace `your-api-key-here` with your actual API key.
-- Ensure that the port mapping in the `ports` section matches your desired host and container ports.
-- The `restart: unless-stopped` policy ensures that the container restarts automatically unless you stop it manually.
-
-## API Documentation
-
-### Endpoint
-
-- **POST** `/generate-pdf`
-
-### Request Parameters
-
-- **Url** (`string`, optional): The web page URL to convert to PDF.
-- **HtmlContent** (`string`, optional): The HTML content to convert to PDF.
-- **HideSelectors** (`string`, optional): CSS selectors of elements to hide.
-- **WatermarkText** (`string`, optional): Text to use as a watermark.
-- **WatermarkImageFile** (`IFormFile`, optional): Image file to use as a watermark.
-- **StampImageFile** (`IFormFile`, optional): Stamp image file.
-
-### Example Request
+From the directory containing the `docker-compose.yml` file, run:
 
 ```bash
-curl -X POST http://localhost:5000/generate-pdf \
-     -H "X-API-KEY: your-api-key-here" \
-     -F "HtmlContent=<h1>Hello, World!</h1>" \
-     -F "WatermarkText=Confidential" \
-     -F "WatermarkPosition=Center" \
-     -o output.pdf
+docker-compose up --build
 ```
 
-## Usage Examples
+The API will be available at [http://localhost:5000](http://localhost:5000).
 
-### Generating a PDF from HTML Content
+## Client Test Command
+
+You can test the API endpoints using curl. Below are example commands:
+
+### Test PDF Generation from URL
 
 ```bash
-curl -X POST http://localhost:5000/generate-pdf \
-     -H "X-API-KEY: your-api-key-here" \
-     -F "HtmlContent=<p>This is a sample PDF generated from HTML content.</p>" \
-     -o sample.pdf
+curl -X POST "http://localhost:5000/api/pdf/from-url" \
+  -H "X-API-KEY: YOUR_API_KEY" \
+  -F "url=https://example.com" \
+  -F "watermarkText=Confidential Document" \
+  -F "stampImageFile=@/path/to/stamp.png" --output generated_from_url.pdf
 ```
 
-### Adding a Text Watermark
+### Test PDF Generation from HTML
 
 ```bash
-curl -X POST http://localhost:5000/generate-pdf \
-     -H "X-API-KEY: your-api-key-here" \
-     -F "Url=https://www.example.com" \
-     -F "WatermarkText=Confidential" \
-     -o confidential.pdf
+curl -X POST "http://localhost:5000/api/pdf/from-html" \
+  -H "X-API-KEY: YOUR_API_KEY" \
+  -F "htmlContent=<html><body><h1>Hello, World!</h1></body></html>" \
+  -F "watermarkText=Draft Version" \
+  -F "stampImageFile=@/path/to/stamp.png" --output generated_from_html.pdf
 ```
 
-### Adding an Image Watermark
+*Notes:*
 
-Uploading an image file:
+- Replace `YOUR_API_KEY` with your actual API key.
+- Adjust the URL, HTML content, watermark text, and stamp image path as needed.
+- The `--output` option saves the PDF file to your local machine.
 
-```bash
-curl -X POST http://localhost:5000/generate-pdf \
-     -H "X-API-KEY: your-api-key-here" \
-     -F "HtmlContent=<p>PDF with uploaded image watermark.</p>" \
-     -F "WatermarkImageFile=@/path/to/watermark.png" \
-     -o uploaded_image_watermark.pdf
-```
+## API Key Authentication
 
-### Adding a Stamp Image
+All endpoints are secured using API key authentication. Ensure that your requests include the API key in the header `X-API-KEY`.
 
-```bash
-curl -X POST http://localhost:5000/generate-pdf \
-     -H "X-API-KEY: your-api-key-here" \
-     -F "HtmlContent=<p>PDF with stamp image.</p>" \
-     -F "StampImageFile=@/path/to/watermark.png" \
-     -F "StampPosition=RightBottom" \
-     -o stamped.pdf
-```
+## Additional Notes
 
-## Security
+- **Watermark Text Wrapping:**  
+  A helper function is provided to insert line breaks into long watermark texts, ensuring proper display without overlapping. Adjustments such as line-height and white-space settings further enhance the text's appearance.
 
-- **API Key Authentication**: The API requires an `X-API-KEY` header with a valid API key for all requests.
-- **Environment Variables**: API keys and other sensitive settings should be stored in environment variables and not in source code or configuration files.
+- **Customization:**  
+  The inline JavaScript and CSS used for injecting watermark and stamp elements can be modified as needed to better match specific design requirements.
 
-## Contributing
+## Dependencies
 
-Contributions are welcome! Please follow these steps:
-
-1. **Fork the Repository**
-2. **Create a Feature Branch**:
-
-   ```bash
-   git checkout -b feature/YourFeature
-   ```
-
-3. **Commit Your Changes**:
-
-   ```bash
-   git commit -m "Add your feature"
-   ```
-
-4. **Push to the Branch**:
-
-   ```bash
-   git push origin feature/YourFeature
-   ```
-
-5. **Create a Pull Request**
+- .NET 9
+- Microsoft.Playwright
+- Microsoft.AspNetCore.Mvc
+- Microsoft.OpenApi
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the MIT License.
+
+
 
