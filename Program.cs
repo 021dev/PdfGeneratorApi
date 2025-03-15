@@ -2,36 +2,30 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Models;
 using Microsoft.Playwright;
 
-
-Microsoft.Playwright.Program.Main(["install"]);
-
-
+Microsoft.Playwright.Program.Main(new string[] { "install" });
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add Playwright service as a singleton
+// Register Playwright Chromium browser as a singleton service
 builder.Services.AddSingleton(async _ =>
 {
     var playwright = await Playwright.CreateAsync();
-    // Launch Chromium browser in headless mode
     return await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
 });
 
-// Add Swagger/OpenAPI support
+// Add Swagger/OpenAPI support with API Key security
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    // Add API Key authentication definition
     c.AddSecurityDefinition("ApiKey", new OpenApiSecurityScheme
     {
         Description = "API Key Authentication",
-        Name = "X-API-KEY", // Header name
+        Name = "X-API-KEY",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.ApiKey,
         Scheme = "ApiKeyScheme"
     });
 
-    // Require API Key authentication globally
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
@@ -45,12 +39,11 @@ builder.Services.AddSwaggerGen(c =>
             new List<string>()
         }
     });
-
 });
 
 var app = builder.Build();
 
-// Use Swagger UI in development environment
+// Enable Swagger UI in development environment
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -60,16 +53,13 @@ if (app.Environment.IsDevelopment())
 // Simple API Key authentication middleware
 app.Use(async (context, next) =>
 {
-    // Check if the X-API-KEY header is present
     if (!context.Request.Headers.TryGetValue("X-API-KEY", out var extractedApiKey))
     {
         context.Response.StatusCode = 401; // Unauthorized
         await context.Response.WriteAsync("API Key is missing");
         return;
     }
-    // Get the configuration service
     var config = context.RequestServices.GetRequiredService<IConfiguration>();
-    // Get the API Key from appsettings.json
     var apiKey = config.GetValue<string>("ApiKey");
     if (string.IsNullOrEmpty(apiKey) || !apiKey.Equals(extractedApiKey))
     {
@@ -77,176 +67,220 @@ app.Use(async (context, next) =>
         await context.Response.WriteAsync("Unauthorized client");
         return;
     }
-
-    await next(); // Proceed to the next middleware/component
+    await next();
 });
 
-// Define the API endpoint for generating PDFs
-app.MapPost("/generate-pdf", async (
-    [FromServices] Task<IBrowser> browserTask, // Inject the Playwright browser
-     string? Url,                    // URL of the page to generate PDF from
-     string? HtmlContent,            // HTML content to render
-     string? HideSelectors,    // CSS selectors to hide elements
-     string? WatermarkText,          // Text for watermark
-     IFormFile? WatermarkImageFile,  // Image file for watermark
-     IFormFile? StampImageFile       // Image file for stamp
-                                        ) => // Bind form data to PdfRequest model
+// Endpoint to generate PDF from a URL
+app.MapPost("/api/pdf/from-url", async (
+    [FromServices] Task<IBrowser> browserTask,
+    string url,
+    string? watermarkText,
+    IFormFile? stampImageFile) =>
 {
     var browser = await browserTask;
     var context = await browser.NewContextAsync();
     var page = await context.NewPageAsync();
 
-    // Load the page content
-    if (!string.IsNullOrEmpty(Url))
-    {
-        // Navigate to the provided URL
-        await page.GotoAsync(Url);
-    }
-    else if (!string.IsNullOrEmpty(HtmlContent))
-    {
-        // Set the HTML content directly
-        await page.SetContentAsync(HtmlContent);
-    }
-    else
-    {
-        // Return a bad request response if neither URL nor HTML content is provided
-        return Results.BadRequest("A URL or HTML content must be provided");
-    }
-
-    // Hide specified elements based on CSS selectors
-    var hideSelectorsList = HideSelectors?
-    .Split(new[] { ',', ';','|' }, StringSplitOptions.RemoveEmptyEntries)
-    .Select(s => s.Trim())
-    .ToList();
-    if (hideSelectorsList != null && hideSelectorsList.Any())
-    {
-        foreach (var selector in hideSelectorsList)
-        {
-            // Execute JavaScript to hide elements matching the selector
-            await page.EvaluateAsync($"() => {{ const elements = document.querySelectorAll('{selector}'); elements.forEach(el => el.style.display = 'none'); }}");
-        }
-    }
-
-    // Add watermark if specified
-    if (!string.IsNullOrEmpty(WatermarkText) || WatermarkImageFile != null)
-    {
-        // Generate CSS for the watermark
-        var watermarkCss = await GenerateWatermarkCssAsync(WatermarkText, WatermarkImageFile);
-        // Inject the CSS into the page
-        await page.AddStyleTagAsync(new() { Content = watermarkCss });
-    }
-
-    // Add stamp if specified
-    if (StampImageFile != null)
-    {
-        // Generate CSS for the stamp
-        var stampCss = await GenerateStampCssAsync(StampImageFile);
-        // Inject the CSS into the page
-        await page.AddStyleTagAsync(new() { Content = stampCss });
-    }
-
+    // Navigate to the provided URL
+    await page.GotoAsync(url);
     await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-    // Generate the PDF with specified options
+    // Add watermark and stamp via direct script injection, which is more reliable
+    if (!string.IsNullOrEmpty(watermarkText))
+    {
+        await page.EvaluateAsync($@"
+            // Create watermark element
+            const watermark = document.createElement('div');
+            watermark.style.position = 'fixed';
+            watermark.style.top = '0';
+            watermark.style.left = '0';
+            watermark.style.width = '100%';
+            watermark.style.height = '100%';
+            watermark.style.display = 'flex';
+            watermark.style.alignItems = 'center';
+            watermark.style.justifyContent = 'center';
+            watermark.style.pointerEvents = 'none';
+            watermark.style.zIndex = '9999';
+            
+            // Add watermark text
+            const watermarkText = document.createElement('div');
+            watermarkText.innerText = '{watermarkText}';
+            watermarkText.style.color = 'rgba(0, 0, 0, 0.15)';
+            watermarkText.style.fontSize = '{(watermarkText.Length <= 10 ? "4.5rem" :
+                                           watermarkText.Length <= 20 ? "4rem" :
+                                           watermarkText.Length <= 30 ? "3.5rem" :
+                                           watermarkText.Length <= 40 ? "3rem" : "2.5rem")}';
+            watermarkText.style.fontWeight = 'bold';
+            watermarkText.style.transform = 'rotate(-45deg)';
+            watermarkText.style.whiteSpace = 'nowrap';
+            watermarkText.style.textAlign = 'center';
+            watermarkText.style.lineHeight = '1.2';
+            
+            watermark.appendChild(watermarkText);
+            document.body.appendChild(watermark);
+        ");
+    }
+
+    // Add stamp if provided
+    if (stampImageFile != null)
+    {
+        var imageUrl = await GetImageUrlAsync(stampImageFile);
+        await page.EvaluateAsync($@"
+            // Create stamp element
+            const stamp = document.createElement('div');
+            stamp.style.position = 'fixed';
+            stamp.style.bottom = '30px';
+            stamp.style.right = '30px';
+            stamp.style.width = '150px';
+            stamp.style.height = '150px';
+            stamp.style.backgroundImage = 'url(""{imageUrl}"")';
+            stamp.style.backgroundSize = 'contain';
+            stamp.style.backgroundRepeat = 'no-repeat';
+            stamp.style.backgroundPosition = 'center';
+            stamp.style.pointerEvents = 'none';
+            stamp.style.zIndex = '10000';
+            
+            document.body.appendChild(stamp);
+        ");
+    }
+
+    // Wait a bit for the DOM changes to be processed
+    await page.WaitForTimeoutAsync(500);
+
+    // Generate and return the PDF
     var pdfStream = await page.PdfAsync(new PagePdfOptions
     {
         Format = PaperFormat.A4,
         PrintBackground = true,
-        Margin = new() { Top = "1cm", Bottom = "1cm", Left = "1cm", Right = "1cm" },
-        Landscape = false
+        Margin = new() { Top = "1cm", Bottom = "1cm", Left = "1cm", Right = "1cm" }
     });
 
-    // Return the generated PDF file
     return Results.File(pdfStream, "application/pdf", "generated.pdf");
-})
-    .DisableAntiforgery(); // Disable anti-forgery token validation for this endpoint
+}).DisableAntiforgery();
+
+// Endpoint to generate PDF from full HTML content
+app.MapPost("/api/pdf/from-html", async (
+    [FromServices] Task<IBrowser> browserTask,
+    string htmlContent,
+    string? watermarkText,
+    IFormFile? stampImageFile) =>
+{
+    var browser = await browserTask;
+    var context = await browser.NewContextAsync();
+    var page = await context.NewPageAsync();
+
+    // Set the page content with the provided HTML
+    await page.SetContentAsync(htmlContent);
+    await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+    // Add watermark directly via script for better reliability
+    if (!string.IsNullOrEmpty(watermarkText))
+    {
+        await page.EvaluateAsync($@"
+            // Create watermark element
+            const watermark = document.createElement('div');
+            watermark.style.position = 'fixed';
+            watermark.style.top = '0';
+            watermark.style.left = '0';
+            watermark.style.width = '100%';
+            watermark.style.height = '100%';
+            watermark.style.display = 'flex';
+            watermark.style.alignItems = 'center';
+            watermark.style.justifyContent = 'center';
+            watermark.style.pointerEvents = 'none';
+            watermark.style.zIndex = '9999';
+            
+            // Add watermark text
+            const watermarkText = document.createElement('div');
+            watermarkText.innerText = '{watermarkText}';
+            watermarkText.style.color = 'rgba(0, 0, 0, 0.15)';
+            watermarkText.style.fontSize = '{(watermarkText.Length <= 10 ? "4.5rem" :
+                                           watermarkText.Length <= 20 ? "4rem" :
+                                           watermarkText.Length <= 30 ? "3.5rem" :
+                                           watermarkText.Length <= 40 ? "3rem" : "2.5rem")}';
+            watermarkText.style.fontWeight = 'bold';
+            watermarkText.style.transform = 'rotate(-45deg)';
+            watermarkText.style.whiteSpace = 'nowrap';
+            watermarkText.style.textAlign = 'center';
+            watermarkText.style.lineHeight = '1.2';
+            
+            watermark.appendChild(watermarkText);
+            document.body.appendChild(watermark);
+        ");
+    }
+
+    // Add stamp if provided
+    if (stampImageFile != null)
+    {
+        var imageUrl = await GetImageUrlAsync(stampImageFile);
+        await page.EvaluateAsync($@"
+            // Create stamp element
+            const stamp = document.createElement('div');
+            stamp.style.position = 'fixed';
+            stamp.style.bottom = '30px';
+            stamp.style.right = '30px';
+            stamp.style.width = '180px';
+            stamp.style.height = '180px';
+            stamp.style.backgroundImage = 'url(""{imageUrl}"")';
+            stamp.style.backgroundSize = 'contain';
+            stamp.style.backgroundRepeat = 'no-repeat';
+            stamp.style.backgroundPosition = 'center';
+            stamp.style.pointerEvents = 'none';
+            stamp.style.zIndex = '10000';
+            
+            document.body.appendChild(stamp);
+        ");
+    }
+
+    // Wait a bit for the DOM changes to be processed
+    await page.WaitForTimeoutAsync(500);
+
+    // Generate and return the PDF
+    var pdfStream = await page.PdfAsync(new PagePdfOptions
+    {
+        Format = PaperFormat.A4,
+        PrintBackground = true,
+        Margin = new() { Top = "1cm", Bottom = "1cm", Left = "1cm", Right = "1cm" }
+    });
+
+    return Results.File(pdfStream, "application/pdf", "generated.pdf");
+}).DisableAntiforgery();
 
 app.Run();
 
-// Helper methods
-
-// Generate CSS for the watermark
-async Task<string> GenerateWatermarkCssAsync(string watermark,IFormFile? image)
-{
-
-    var opacity = 0.2; // Set a reasonable opacity
-    if (!string.IsNullOrEmpty(watermark))
-    {
-        // Create CSS for text watermark
-        return $@"
-            body::after {{
-                content: '{watermark}';
-                position: fixed;
-                top: 50%; 
-                left: 50%; 
-                transform: translate(-50%, -50%);
-                font-size: 5rem;
-                font-weight: 800;
-                color: rgba(0, 0, 0, {opacity});
-                pointer-events: none;
-                z-index: 9999;
-                transform: rotate(-45deg);
-            }}";
-    }
-    else if (image != null)
-    {
-        // Get the image URL (either from the uploaded file or the provided URL)
-        var imageUrl = await GetImageUrlAsync(image);
-
-        // Create CSS for image watermark
-        return $@"
-            body::after {{
-                content: '';
-                position: fixed;
-                width: 100%;
-                height: 100%;
-                top: 0; left: 0;
-                background: url('{imageUrl}') no-repeat center center;
-                background-size: contain;
-                opacity: {opacity};
-                transform: rotate(-45deg);
-                pointer-events: none;
-            }}";
-    }
-
-    return string.Empty; // Return empty string if no watermark is specified
-}
-
-// Generate CSS for the stamp
-async Task<string> GenerateStampCssAsync( IFormFile? image)
-{
-
-    // Get the image URL (either from the uploaded file or the provided URL)
-    var imageUrl = await GetImageUrlAsync(image);
-    // Create CSS for the stamp image
-    return $@"
-        body::before {{
-            content: '';
-            position: fixed;
-            bottom: 0; 
-            right: 0;
-            width: 180px;
-            height: 180px;
-            background: url('{imageUrl}') no-repeat center center;
-            background-size: contain;
-            opacity: 1;
-            pointer-events: none;
-        }}";
-}
-
-// Convert uploaded image file to Base64 data URL or use the provided image URL
+// Helper function to convert an uploaded image file to a Base64 data URL
 async Task<string> GetImageUrlAsync(IFormFile imageFile)
 {
-    if (imageFile != null)
-    {
-        using var memoryStream = new MemoryStream();
-        await imageFile.CopyToAsync(memoryStream);
-        var bytes = memoryStream.ToArray();
-        var base64 = Convert.ToBase64String(bytes);
-        var contentType = imageFile.ContentType;
-        // Return the image as a Base64 data URL
-        return $"data:{contentType};base64,{base64}";
-    }
-    return string.Empty; // Return empty string if no image is provided
+    using var memoryStream = new MemoryStream();
+    await imageFile.CopyToAsync(memoryStream);
+    var bytes = memoryStream.ToArray();
+    var base64 = Convert.ToBase64String(bytes);
+    var contentType = imageFile.ContentType;
+    return $"data:{contentType};base64,{base64}";
 }
 
+// For long watermarks that need to wrap instead of using a single line
+async Task<string> GetWrappedWatermarkAsync(string watermarkText)
+{
+    // If text is too long, insert line breaks every few words
+    if (watermarkText.Length > 30)
+    {
+        var words = watermarkText.Split(' ');
+        var wrappedText = new System.Text.StringBuilder();
+
+        for (int i = 0; i < words.Length; i++)
+        {
+            wrappedText.Append(words[i] + " ");
+
+            // Add a line break after every 3-4 words
+            if (i > 0 && (i + 1) % 4 == 0 && i < words.Length - 1)
+            {
+                wrappedText.Append("\\n");
+            }
+        }
+
+        return wrappedText.ToString().TrimEnd();
+    }
+
+    return watermarkText;
+}
