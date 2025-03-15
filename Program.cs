@@ -53,11 +53,6 @@ if (app.Environment.IsDevelopment())
 // Simple API Key authentication middleware
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/swagger"))
-    {
-        await next();
-        return;
-    }
     if (!context.Request.Headers.TryGetValue("X-API-KEY", out var extractedApiKey))
     {
         context.Response.StatusCode = 401; // Unauthorized
