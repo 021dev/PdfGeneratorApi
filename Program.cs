@@ -51,6 +51,13 @@ if (app.Environment.IsDevelopment())
 // Simple API Key authentication middleware
 app.Use(async (context, next) =>
 {
+    // Skip authentication for health check endpoint
+    if (context.Request.Path.StartsWithSegments("/health"))
+    {
+        await next();
+        return;
+    }
+
     if (!context.Request.Headers.TryGetValue("X-API-KEY", out var extractedApiKey))
     {
         context.Response.StatusCode = 401; // Unauthorized
