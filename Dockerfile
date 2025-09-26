@@ -38,14 +38,14 @@ RUN dotnet publish "PdfGeneratorApi.csproj" -c Release -o /app/publish
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-# Copy the project file into the final image for Playwright installation
-COPY ["PdfGeneratorApi.csproj", "./"]
+# Copy all source files for Playwright installation
+COPY . .
 
 # Install Playwright CLI and browsers with dependencies
 RUN dotnet tool install --global Microsoft.Playwright.CLI
 ENV PATH="${PATH}:/root/.dotnet/tools"
-RUN dotnet restore "PdfGeneratorApi.csproj"
-RUN playwright install --with-deps chromium
+RUN dotnet build "PdfGeneratorApi.csproj" -c Release
+RUN playwright install chromium
 
 # Set an environment variable (optional)
 # ENV API_KEY=your-api-key-here
