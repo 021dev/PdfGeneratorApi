@@ -1,4 +1,9 @@
-[![.NET](https://github.com/neozhu/PdfGeneratorApi/actions/workflows/dotnet.yml/badge.svg)](https://github.com/neozhu/PdfGeneratorApi/actions/workflows/dotnet.yml) [![Docker Image CI](https://github.com/neozhu/PdfGeneratorApi/actions/workflows/docker-image.yml/badge.svg)](https://github.com/neozhu/PdfGeneratorApi/actions/workflows/docker-image.yml)
+# PDF Generator API 🚀
+
+[![CI/CD](https://github.com/your-username/pdf-generator-api/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/pdf-generator-api/actions/workflows/ci.yml)
+[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)](https://docker.com)
+[![.NET](https://img.shields.io/badge/.NET-9.0-512BD4)](https://dotnet.microsoft.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 
 
@@ -199,16 +204,102 @@ All endpoints are secured using API key authentication. Ensure that your request
 - **Customization:**  
   The inline JavaScript and CSS used for injecting watermark and stamp elements can be modified as needed to better match specific design requirements.
 
+## 🛠️ DevOps & Deployment
+
+### Automated Package Updates
+
+The project includes automated dependency management:
+
+- **Dependabot**: Automatically creates PRs for dependency updates weekly
+- **Version Ranges**: Uses flexible version ranges (e.g., `1.47.*`) for minor updates
+- **Update Script**: Run `./update-packages.sh` to manually update packages
+
+### CI/CD Pipeline
+
+GitHub Actions workflow includes:
+- ✅ Automated builds and tests
+- ✅ Docker image building and testing
+- ✅ Security vulnerability scanning with Trivy
+- ✅ Dependency vulnerability checks
+- ✅ Health check validation
+
+### Docker Best Practices
+
+- 🏗️ **Multi-stage builds** for optimized image size
+- 🔒 **Non-root user** for enhanced security
+- 🏥 **Health checks** with `/health` endpoint
+- 📋 **Proper labeling** for container management
+- 🚀 **Security optimizations** (no-new-privileges, read-only root filesystem)
+
+### Local Development
+
+```bash
+# Using Docker Compose
+docker-compose up --build
+
+# Direct Docker run
+docker build -t pdf-generator-api .
+docker run -p 8080:8080 pdf-generator-api
+```
+
+### Production Deployment
+
+The application is optimized for cloud deployments (Northflank, Railway, Render, etc.):
+
+```bash
+# Build for production
+docker build -t your-registry/pdf-generator-api:latest .
+docker push your-registry/pdf-generator-api:latest
+```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ApiKey` | API authentication key | `your-api-key-here` |
+| `ASPNETCORE_ENVIRONMENT` | Environment mode | `Production` |
+| `ASPNETCORE_URLS` | Server URLs | `http://+:8080` |
+
+## 📊 Monitoring & Health
+
+- **Health Endpoint**: `GET /health` returns JSON status
+- **Docker Health Checks**: Automatic container health monitoring
+- **Structured Logging**: Built-in ASP.NET Core logging
+
+## 🧪 Testing
+
+```bash
+# Run tests
+dotnet test
+
+# Test health endpoint
+curl http://localhost:8080/health
+
+# Test with Docker
+docker run --rm pdf-generator-api curl -f http://localhost:8080/health
+```
+
 ## Dependencies
 
-- .NET 9
-- Microsoft.Playwright
-- Microsoft.AspNetCore.Mvc
-- Microsoft.OpenApi
+- **.NET 9.0** - Runtime framework
+- **Microsoft.Playwright** - Browser automation
+- **Swashbuckle.AspNetCore** - OpenAPI documentation
 
-## License
+## 📄 License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+**Made with ❤️ using .NET 9 and Playwright**
 
 
 
