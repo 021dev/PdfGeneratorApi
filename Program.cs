@@ -2,8 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Models;
 using Microsoft.Playwright;
 
-Microsoft.Playwright.Program.Main(new string[] { "install" });
-
 var builder = WebApplication.CreateBuilder(args);
 
 // Register Playwright Chromium browser as a singleton service
