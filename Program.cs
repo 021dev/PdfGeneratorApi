@@ -256,29 +256,3 @@ async Task<string> GetImageUrlAsync(IFormFile imageFile)
     var contentType = imageFile.ContentType;
     return $"data:{contentType};base64,{base64}";
 }
-
-// For long watermarks that need to wrap instead of using a single line
-async Task<string> GetWrappedWatermarkAsync(string watermarkText)
-{
-    // If text is too long, insert line breaks every few words
-    if (watermarkText.Length > 30)
-    {
-        var words = watermarkText.Split(' ');
-        var wrappedText = new System.Text.StringBuilder();
-
-        for (int i = 0; i < words.Length; i++)
-        {
-            wrappedText.Append(words[i] + " ");
-
-            // Add a line break after every 3-4 words
-            if (i > 0 && (i + 1) % 4 == 0 && i < words.Length - 1)
-            {
-                wrappedText.Append("\\n");
-            }
-        }
-
-        return wrappedText.ToString().TrimEnd();
-    }
-
-    return watermarkText;
-}
