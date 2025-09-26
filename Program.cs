@@ -244,6 +244,9 @@ app.MapPost("/api/pdf/from-html", async (
     return Results.File(pdfStream, "application/pdf", "generated.pdf");
 }).DisableAntiforgery();
 
+// Health check endpoint
+app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+
 app.Run();
 
 // Helper function to convert an uploaded image file to a Base64 data URL
