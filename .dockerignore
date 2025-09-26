@@ -1,0 +1,51 @@
+# Git
+.git
+.gitignore
+.github
+
+# Documentation
+README.md
+*.md
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build outputs
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+
+# Test files
+*.testsettings
+coverage/
+*.coverage
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Node.js (if any)
+node_modules/
+npm-debug.log*
+
+# Docker
+Dockerfile*
+docker-compose*.yml
