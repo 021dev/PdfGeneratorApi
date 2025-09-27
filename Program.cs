@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
 using Microsoft.Playwright;
 
@@ -52,26 +51,16 @@ if (app.Environment.IsDevelopment())
 // Simple API Key authentication middleware
 app.Use(async (context, next) =>
 {
-    var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-    var requestId = Guid.NewGuid().ToString().Substring(0, 8);
-
-    logger.LogInformation("[{RequestId}] Incoming request: {Method} {Path} from {RemoteIp}",
-        requestId, context.Request.Method, context.Request.Path, context.Connection.RemoteIpAddress);
-
     // Skip authentication for health check endpoint
     if (context.Request.Path.StartsWithSegments("/health"))
     {
-        logger.LogInformation("[{RequestId}] Health check request - skipping authentication", requestId);
         await next();
-        logger.LogInformation("[{RequestId}] Health check completed", requestId);
         return;
     }
 
     // Check for API key header
     if (!context.Request.Headers.TryGetValue("X-API-KEY", out var extractedApiKey))
     {
-        logger.LogWarning("[{RequestId}] API key missing in request headers. Available headers: {Headers}",
-            requestId, string.Join(", ", context.Request.Headers.Keys));
         context.Response.StatusCode = 401; // Unauthorized
         await context.Response.WriteAsync("API Key is missing");
         return;
@@ -81,34 +70,15 @@ app.Use(async (context, next) =>
     var config = context.RequestServices.GetRequiredService<IConfiguration>();
     var configuredApiKey = config.GetValue<string>("ApiKey");
 
-    // Mask API keys for logging (show first 4 and last 4 characters)
-    var receivedMasked = MaskApiKey(extractedApiKey!);
-    var configuredMasked = MaskApiKey(configuredApiKey ?? "");
-
-    logger.LogInformation("[{RequestId}] API key validation - Received: {ReceivedKey}, Configured: {ConfiguredKey}",
-        requestId, receivedMasked, configuredMasked);
-
     // Validate API key
-    if (string.IsNullOrEmpty(configuredApiKey))
+    if (string.IsNullOrEmpty(configuredApiKey) || !configuredApiKey.Equals(extractedApiKey))
     {
-        logger.LogError("[{RequestId}] No API key configured in application settings", requestId);
-        context.Response.StatusCode = 500; // Internal Server Error
-        await context.Response.WriteAsync("Server configuration error");
-        return;
-    }
-
-    if (!configuredApiKey.Equals(extractedApiKey))
-    {
-        logger.LogWarning("[{RequestId}] API key mismatch - authentication failed. Keys match: {KeysMatch}",
-            requestId, configuredApiKey.Equals(extractedApiKey, StringComparison.Ordinal));
         context.Response.StatusCode = 401; // Unauthorized
         await context.Response.WriteAsync("Unauthorized client");
         return;
     }
 
-    logger.LogInformation("[{RequestId}] API key authentication successful", requestId);
     await next();
-    logger.LogInformation("[{RequestId}] Request processing completed", requestId);
 });
 
 // Endpoint to generate PDF from a URL
@@ -342,40 +312,12 @@ app.MapPost("/api/pdf/from-html", async (
 }).DisableAntiforgery();
 
 // Health check endpoint
-app.MapGet("/health", (ILogger<Program> logger) =>
+app.MapGet("/health", () =>
 {
-    logger.LogInformation("Health check requested from {RemoteIp}", "client");
-    var response = new { status = "healthy", timestamp = DateTime.UtcNow };
-    logger.LogInformation("Health check response: {Status}", response.status);
-    return Results.Ok(response);
-});
-
-// Debug endpoint to check configuration precedence
-app.MapGet("/debug/config", (IConfiguration config, ILogger<Program> logger) =>
-{
-    var apiKey = config.GetValue<string>("ApiKey");
-    var maskedKey = MaskApiKey(apiKey ?? "");
-
-    logger.LogInformation("Configuration debug - ApiKey: {MaskedKey}, Source: {Source}",
-        maskedKey, apiKey == "your-api-key-here" ? "appsettings.json" : "environment/override");
-
-    return Results.Ok(new {
-        apiKeyConfigured = !string.IsNullOrEmpty(apiKey),
-        apiKeyMasked = maskedKey,
-        configurationSource = apiKey == "your-api-key-here" ? "appsettings.json" : "environment_override"
-    });
+    return Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
 });
 
 app.Run();
-
-// Helper function to mask API keys for secure logging
-string MaskApiKey(string apiKey)
-{
-    if (string.IsNullOrEmpty(apiKey)) return "[empty]";
-    if (apiKey.Length <= 8) return new string('*', apiKey.Length);
-
-    return apiKey.Substring(0, 4) + new string('*', apiKey.Length - 8) + apiKey.Substring(apiKey.Length - 4);
-}
 
 // Helper function to convert an uploaded image file to a Base64 data URL
 async Task<string> GetImageUrlAsync(IFormFile imageFile)
